@@ -1,71 +1,88 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import Timer from "../components/Timer";
-import Question from "../components/Question";
+import React, { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+import { io } from "socket.io-client";
 
-function QuizRoom() {
-  const navigate = useNavigate();
-  const [questions, setQuestions] = useState([]);
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [scores, setScores] = useState({ player1: 0, player2: 0 });
-  const [turn, setTurn] = useState("player1");
+const socket = io("http://localhost:3001");
 
-  useEffect(() => {
-    fetch("https://opentdb.com/api.php?amount=5&type=multiple")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.results) {
-          setQuestions(data.results);
+const QuizRoom = () => {
+    const { roomId } = useParams();
+    const [game, setGame] = useState(null);
+    const [player, setPlayer] = useState(null);
+    const [timeLeft, setTimeLeft] = useState(10); // 10-second timer
+    const [playerTurn, setPlayerTurn] = useState(null);
+
+    useEffect(() => {
+        console.log("Joining room:", roomId);
+        socket.emit("joinGame", { roomId });
+
+        socket.on("gameStarted", (gameData) => {
+            console.log("Game started:", gameData);
+            setGame(gameData);
+            setPlayer(gameData.players.length === 1 ? "player1" : "player2");
+            setPlayerTurn("player1"); // Set initial turn
+            setTimeLeft(10);
+        });
+
+        socket.on("updateGame", (updatedGame) => {
+            console.log("Game updated:", updatedGame);
+            setGame(updatedGame);
+            setPlayerTurn(updatedGame.turn);
+            setTimeLeft(10);
+        });
+
+        socket.on("gameOver", (scores) => {
+            console.log("Game Over:", scores);
+            alert(`Game Over! Final Scores: ${JSON.stringify(scores)}`);
+        });
+
+        return () => {
+            socket.off("gameStarted");
+            socket.off("updateGame");
+            socket.off("gameOver");
+        };
+    }, [roomId]);
+
+    useEffect(() => {
+        if (timeLeft > 0) {
+            const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+            return () => clearTimeout(timer);
         }
-      })
-      .catch((error) => console.error("Error fetching questions:", error));
-  }, []);
+    }, [timeLeft]);
 
-  const handleAnswer = (selected) => {
-    if (questions.length === 0) return;
+    const handleAnswer = (answer) => {
+        if (playerTurn !== player) {
+            alert("Wait for your turn!");
+            return;
+        }
+        socket.emit("answer", { roomId, answer });
+    };
 
-    if (selected === questions[currentQuestion].correct_answer) {
-      setScores((prev) => ({ ...prev, [turn]: prev[turn] + 1 }));
-    }
+    if (!game) return <h2>Loading game...</h2>;
 
-    setTurn(turn === "player1" ? "player2" : "player1");
+    return (
+        <div>
+            <h2>Quiz Room: {roomId}</h2>
+            <h3>Turn: {playerTurn}</h3>
+            <h4>Time Left: {timeLeft}s</h4>
 
-    if (turn === "player2") {
-      if (currentQuestion < questions.length - 1) {
-        setCurrentQuestion((prev) => prev + 1);
-      } else {
-        navigate("/result", { state: { scores } });
-      }
-    }
-  };
+            {game.questions && game.currentQuestion < game.questions.length ? (
+                <div>
+                    <h3>{game.questions[game.currentQuestion].question}</h3>
+                    {game.questions[game.currentQuestion].options.map((option, index) => (
+                        <button key={index} onClick={() => handleAnswer(option)}>
+                            {option}
+                        </button>
+                    ))}
+                </div>
+            ) : (
+                <h2>Game Over</h2>
+            )}
 
-  const handleTimeout = () => {
-    // Move to the next question automatically if time runs out
-    setTurn(turn === "player1" ? "player2" : "player1");
-
-    if (turn === "player2") {
-      if (currentQuestion < questions.length - 1) {
-        setCurrentQuestion((prev) => prev + 1);
-      } else {
-        navigate("/result", { state: { scores } });
-      }
-    }
-  };
-
-  return (
-    <div>
-      <h2>Current Turn: {turn === "player1" ? "Player 1" : "Player 2"}</h2>
-
-      {questions.length === 0 ? (
-        <p>Loading questions...</p>
-      ) : (
-        <>
-          <Timer key={currentQuestion} timeLimit={15} onTimeout={handleTimeout} />
-          <Question data={questions[currentQuestion]} onAnswer={handleAnswer} />
-        </>
-      )}
-    </div>
-  );
-}
+            <h3>Scores:</h3>
+            <p>Player 1: {game.scores.player1}</p>
+            <p>Player 2: {game.scores.player2}</p>
+        </div>
+    );
+};
 
 export default QuizRoom;
