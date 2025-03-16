@@ -26,9 +26,16 @@ A **real-time multiplayer quiz game** built with **React.js**. Players can compe
 ### **1️⃣ Clone the Repository**
 ```sh
 git clone https://github.com/BhaskrPandey/New-Multiplayer-Quiz-App.git
-cd New-Multiplayer-Quiz-App
+cd New-Multiplayer-Quiz-App (Frontend)
+cd backend (Backend)
 
 
-Install Dependencies : npm install(In terminal)
 
-Start the Development Server: npm run dev
+Open two instance of terminal one for backend and one for frontend
+
+Do npm install in both
+
+Start backend : npm start
+Start Frontend(multiplayer-quiz-app): npm run dev
+
+Used Web socket for inter connection. Ports are defined already change it if required. 
